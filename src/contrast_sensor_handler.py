@@ -65,6 +65,14 @@ mem['active_pattern'] = deque()
 
 
 """
+Informational variables so that we can use the data as soon as a 
+pattern starts
+(these are somewhat optional)
+"""
+mem['last_pattern_start_ts'] = 0.
+mem['last_pattern_end_confirmed'] = False
+
+"""
 Communications
 """
 def now():
@@ -125,16 +133,50 @@ if __name__ == "__main__":
                     # Difference is too short -- throw it out
                     continue
                 else: 
+                    # We've detected a stripe! 
                     # Append rising and falling timestamps to the active pattern
                     mem['active_pattern'].append(rising_ts)
                     mem['active_pattern'].append(falling_ts)
-                    
-            now = time.clock()   # What should this actually be? 
-            if now - last_falling_ts > mem['pattern_confirm_wait_time']:
+
+                    # Add a '10' to our sliding flight profile to indicate the start and finish of a stripe
+                    mem['sliding_flight_profile'].appendleft(1)
+                    mem['sliding_flight_profile'].appendleft(0)
+
+                    # If the end of the last pattern was confirmed, then we're a new pattern.
+                    if mem['last_pattern_end_confirmed']:  
+
+                        # Update with the most current info for positioning
+                        mem['last_pattern_start_ts'] = rising_ts
+                        mem['last_pattern_end_confirmed'] = False  # We'll confirm this once the pattern is complete
+
+                    # @todo: Maybe recalculate the speed estimate and risefall diff here? 
+            
+            # Check to see if enough time has passed for us to confirm that we're past a pattern
+            # Note: not sure exactly what would happen if we stopped in the middle of a pattern, but I think it would actually work
+            last_falling_ts = mem['active_pattern'][-1]  # Grab the last value -- it's a falling_ts
+            
+            if now() - last_falling_ts > mem['pattern_confirm_wait_time']:
                 # We have finished a pattern!
+                
+                # Add a 0 to our sliding flight profile to indicate the end of a pattern
+                mem['sliding_flight_profile'].appendleft(0)
+                
                 # Append the first rising_ts of the pattern (that's the start of a section)
                 mem['section_timestamps'].append(mem['active_pattern'][0])
+                # @todo: should we also capture the time at which the timestamp was added so we can more accurately estimate position?
+                # (note: position at an older timestamp is less 
+                # useful but more accurate than an estimated position
+                # based on speed and time passed since the timestamp was entered)
+                
+                # Increment the section counter
+                mem['section_counter'] += 1
+                
+                # Confirm that the pattern is finished
+                mem['last_pattern_end_confirmed'] = True
 
+                # Clear the active_pattern queue
+                mem['active_pattern'].clear()
+                
         elif state == "PATTERN_PROCESS":
             
             
