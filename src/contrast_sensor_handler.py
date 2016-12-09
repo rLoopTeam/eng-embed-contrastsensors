@@ -132,6 +132,8 @@ if __name__ == "__main__":
 
     state = "WAIT"
     
+    print "Started contrast sensor handler loop in {} state".format(state)
+        
     while(True):
         # State machine. Note that python has no switch/case
         if state == "WAIT":
